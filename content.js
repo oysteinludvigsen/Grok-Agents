@@ -41,7 +41,13 @@
   };
 
   chrome.runtime.sendMessage({ type: "getSettings" }, (res) => {
-    if (res) Object.assign(settings, res);
+    if (res) {
+      Object.assign(settings, res);
+      updatePanelCwd();
+      // Sync the auto-execute checkbox if the panel already exists
+      const cb = document.getElementById("ga-auto-exec");
+      if (cb) cb.checked = settings.autoExecute;
+    }
   });
 
   chrome.storage.onChanged.addListener((changes) => {
@@ -167,56 +173,93 @@
 
   /**
    * Scans the page for unprocessed agent code blocks.
-   * Uses three strategies for maximum compatibility with Grok's renderer.
+   *
+   * grok.com renders ```agent:shell as a code block with language label
+   * "agent" (stripping ":shell").  We therefore match broadly:
+   *   - class="language-agent*"
+   *   - a visible language label containing "agent"
+   *   - text content starting with "agent" on the first line
+   *   - raw text fences in message containers
    */
   function findAgentBlocks() {
     const blocks = [];
     const seen = new Set();
 
-    // Strategy 1 — <code class="language-agent:shell">
-    for (const el of document.querySelectorAll('code[class*="language-agent:"]')) {
-      if (el.hasAttribute(PROCESSED)) continue;
-      const m = el.className.match(/language-agent:(shell|read|write)(?::(.+))?/);
-      if (!m) continue;
-      const key = `${m[1]}|${el.textContent.trim()}`;
-      if (seen.has(key)) continue;
+    function add(element, tool, arg, content) {
+      if (!content) return;
+      const key = `${tool}|${content}`;
+      if (seen.has(key)) return;
+      if (element.hasAttribute(PROCESSED)) return;
       seen.add(key);
-      blocks.push({ element: el, tool: m[1], arg: m[2]?.trim() ?? null, content: el.textContent.trim() });
+      blocks.push({ element, tool, arg, content });
     }
 
-    // Strategy 2 — <pre> / <code> whose text starts with "agent:"
+    /** Parse an "agent..." language string into { tool, arg }.
+     *  Accepts: "agent", "agent:shell", "agent:read", "agent:write:/path" */
+    function parseLang(lang) {
+      if (!lang) return null;
+      const s = lang.trim().toLowerCase();
+      if (s === "agent" || s === "agent:shell") return { tool: "shell", arg: null };
+      if (s === "agent:read")                   return { tool: "read",  arg: null };
+      const wm = s.match(/^agent:write(?::(.+))?$/);
+      if (wm) return { tool: "write", arg: wm[1]?.trim() ?? null };
+      if (s.startsWith("agent"))                return { tool: "shell", arg: null };
+      return null;
+    }
+
+    // ── Strategy 1: <code class="language-agent*"> ──────────────────
+    for (const el of document.querySelectorAll('code[class*="language-agent"]')) {
+      if (el.hasAttribute(PROCESSED)) continue;
+      const cls = [...el.classList].find((c) => c.startsWith("language-agent"));
+      const parsed = parseLang(cls?.replace("language-", ""));
+      if (!parsed) continue;
+      add(el, parsed.tool, parsed.arg, el.textContent.trim());
+    }
+
+    // ── Strategy 2: language label in a parent/sibling of <pre> ─────
+    //    grok.com renders: <div>...<span>agent</span>...<pre><code>
+    for (const pre of document.querySelectorAll("pre")) {
+      if (pre.hasAttribute(PROCESSED)) continue;
+      if (blocks.some((b) => pre.contains(b.element))) continue;
+
+      // Walk the parent container looking for a language label
+      const container = pre.parentElement;
+      if (!container) continue;
+
+      let parsed = null;
+      for (const node of container.querySelectorAll("span, div, [class*='lang'], [class*='code-']")) {
+        if (pre.contains(node)) continue; // skip nodes inside the <pre>
+        const txt = node.textContent.trim();
+        parsed = parseLang(txt);
+        if (parsed) break;
+      }
+      if (!parsed) continue;
+
+      const code = pre.querySelector("code") || pre;
+      add(code, parsed.tool, parsed.arg, code.textContent.trim());
+    }
+
+    // ── Strategy 3: text content starting with "agent" ──────────────
     for (const el of document.querySelectorAll("pre code, pre")) {
       if (el.hasAttribute(PROCESSED)) continue;
       if (blocks.some((b) => b.element === el || el.contains(b.element))) continue;
       const text = el.textContent;
-      const m = text.match(/^agent:(shell|read|write)(?::([^\n]*))?\n([\s\S]+)$/);
+      // Match: "agent\ncmd" or "agent:shell\ncmd" etc.
+      const m = text.match(/^agent(?::(shell|read|write)(?::([^\n]*))?)?\n([\s\S]+)$/);
       if (!m) continue;
-      const content = m[3].trim();
-      const key = `${m[1]}|${content}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      blocks.push({ element: el, tool: m[1], arg: m[2]?.trim() ?? null, content });
+      add(el, m[1] || "shell", m[2]?.trim() ?? null, m[3].trim());
     }
 
-    // Strategy 3 — raw text scan inside message containers
+    // ── Strategy 4: raw text scan inside message containers ─────────
     for (const msgEl of document.querySelectorAll(
       '[class*="message"], [class*="Message"], [data-message-author-role="assistant"], [data-testid*="message"]'
     )) {
       const raw = msgEl.textContent;
-      const re = /```agent:(shell|read|write)(?::([^\n]*))?\n([\s\S]*?)```/g;
+      // Match ```agent:shell ... ``` and also ```agent ... ```
+      const re = /```agent(?::(shell|read|write)(?::([^\n]*))?)?\n([\s\S]*?)```/g;
       let match;
       while ((match = re.exec(raw)) !== null) {
-        const content = match[3].trim();
-        const key = `${match[1]}|${content}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        blocks.push({
-          element: msgEl,
-          tool: match[1],
-          arg: match[2]?.trim() ?? null,
-          content,
-          rawMatch: true,
-        });
+        add(msgEl, match[1] || "shell", match[2]?.trim() ?? null, match[3].trim());
       }
     }
 
