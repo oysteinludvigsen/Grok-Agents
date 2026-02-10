@@ -39,6 +39,8 @@
     autoExecute: false,
     timeout: 30_000,
     maxOutputSize: 50_000,
+    logsVisible: false,
+    debugLogging: false,
   };
 
   // Load settings directly from storage (no roundtrip through background.js,
@@ -78,7 +80,19 @@
           <span>Auto-execute</span>
         </label>
         <button id="ga-scan-btn" class="ga-btn">Scan &amp; Execute</button>
-        <div id="ga-log" class="ga-log"></div>
+        <div class="ga-log-header" id="ga-log-header">
+          <button class="ga-log-toggle" id="ga-log-toggle">
+            <span class="ga-log-arrow" id="ga-log-arrow">&#9654;</span>
+            Logs
+            <span class="ga-log-count" id="ga-log-count">0</span>
+          </button>
+          <label class="ga-debug-toggle" id="ga-debug-label" style="display:none;">
+            <input type="checkbox" id="ga-debug-check" />
+            <span>Debug</span>
+          </label>
+          <button class="ga-log-clear" id="ga-log-clear" style="display:none;" title="Clear logs">&#10005;</button>
+        </div>
+        <div id="ga-log" class="ga-log" style="display:none;"></div>
       </div>`;
     document.body.appendChild(panel);
 
@@ -97,6 +111,41 @@
 
     // Manual scan
     document.getElementById("ga-scan-btn").addEventListener("click", scanAndExecute);
+
+    // Log panel toggle
+    const logToggle = document.getElementById("ga-log-toggle");
+    const logPanel = document.getElementById("ga-log");
+    const logArrow = document.getElementById("ga-log-arrow");
+    const logClear = document.getElementById("ga-log-clear");
+    const debugLabel = document.getElementById("ga-debug-label");
+
+    function setLogVisible(visible) {
+      settings.logsVisible = visible;
+      logPanel.style.display = visible ? "block" : "none";
+      logArrow.innerHTML = visible ? "&#9660;" : "&#9654;";
+      logClear.style.display = visible ? "inline-block" : "none";
+      debugLabel.style.display = visible ? "inline-flex" : "none";
+      chrome.storage.local.set({ logsVisible: visible });
+    }
+
+    logToggle.addEventListener("click", () => setLogVisible(!settings.logsVisible));
+
+    logClear.addEventListener("click", () => {
+      logPanel.innerHTML = "";
+      updateLogCount();
+    });
+
+    // Debug toggle
+    const debugBox = document.getElementById("ga-debug-check");
+    debugBox.checked = settings.debugLogging;
+    debugBox.addEventListener("change", (e) => {
+      settings.debugLogging = e.target.checked;
+      chrome.storage.local.set({ debugLogging: e.target.checked });
+      appendLog(e.target.checked ? "Debug logging enabled" : "Debug logging disabled", "info");
+    });
+
+    // Restore log visibility from settings
+    if (settings.logsVisible) setLogVisible(true);
 
     // Dragging
     makeDraggable(panel, document.getElementById("ga-drag-handle"));
@@ -154,14 +203,25 @@
     if (el) el.textContent = `Working dir: ${settings.workingDir}`;
   }
 
+  function updateLogCount() {
+    const badge = document.getElementById("ga-log-count");
+    const log = document.getElementById("ga-log");
+    if (badge && log) badge.textContent = log.children.length;
+  }
+
   function appendLog(text, type = "info") {
+    // Skip debug-level messages unless debug logging is on
+    if (type === "debug" && !settings.debugLogging) return;
+
     const log = document.getElementById("ga-log");
     if (!log) return;
     const entry = document.createElement("div");
     entry.className = `ga-log-entry ${type}`;
-    entry.textContent = text;
+    const time = new Date().toLocaleTimeString("en-GB", { hour12: false });
+    entry.textContent = `[${time}] ${text}`;
     log.prepend(entry);
-    while (log.children.length > 50) log.lastChild.remove();
+    while (log.children.length > 200) log.lastChild.remove();
+    updateLogCount();
   }
 
   /* ================================================================ */
@@ -221,10 +281,11 @@
     return `<${tag}${id}${cls}>`;
   }
 
-  function findAgentBlocks(debug = false) {
+  function findAgentBlocks() {
     const blocks = [];
     const seen = new Set();
-    const log = debug ? (...a) => appendLog(a.join(" "), "info") : () => {};
+    const debug = settings.debugLogging;
+    const log = debug ? (...a) => appendLog(a.join(" "), "debug") : () => {};
 
     function add(element, tool, content) {
       if (!content) return;
@@ -419,14 +480,10 @@
     }
     executing = true;
     try {
-      let blocks = findAgentBlocks();
+      const blocks = findAgentBlocks();
       if (blocks.length === 0) {
-        appendLog("No blocks found — running diagnostics…", "info");
-        blocks = findAgentBlocks(true);   // re-run with debug logging
-        if (blocks.length === 0) {
-          appendLog("No new agent blocks found", "info");
-          return;
-        }
+        appendLog("No new agent blocks found", "info");
+        return;
       }
       appendLog(`Found ${blocks.length} agent block(s)`, "info");
 

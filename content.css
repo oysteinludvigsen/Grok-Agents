@@ -111,25 +111,95 @@
 .ga-btn:hover  { background: #4f46e5; }
 .ga-btn:active { background: #4338ca; }
 
-/* Log */
-.ga-log {
+/* Log header bar */
+.ga-log-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 10px;
-  max-height: 160px;
+  padding: 4px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ga-log-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex: 1;
+  text-align: left;
+}
+.ga-log-toggle:hover { color: #e0e0e0; background: rgba(255,255,255,0.05); }
+
+.ga-log-arrow {
+  font-size: 8px;
+  transition: transform 0.15s;
+}
+
+.ga-log-count {
+  background: #30304a;
+  color: #9ca3af;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.ga-debug-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: #6b7280;
+  cursor: pointer;
+}
+.ga-debug-toggle input { accent-color: #f59e0b; width: 12px; height: 12px; }
+.ga-debug-toggle:hover { color: #9ca3af; }
+
+.ga-log-clear {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.ga-log-clear:hover { color: #f87171; background: rgba(248,113,113,0.1); }
+
+/* Log panel */
+.ga-log {
+  max-height: 220px;
   overflow-y: auto;
   font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
   font-size: 11px;
   scrollbar-width: thin;
   scrollbar-color: #333 transparent;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 6px;
 }
 .ga-log-entry {
-  padding: 3px 0;
+  padding: 2px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   word-break: break-all;
+  line-height: 1.4;
 }
 .ga-log-entry.cmd     { color: #60a5fa; }
 .ga-log-entry.success { color: #4ade80; }
 .ga-log-entry.error   { color: #f87171; }
 .ga-log-entry.info    { color: #9ca3af; }
+.ga-log-entry.debug   { color: #f59e0b; }
 
 /* ---- Confirmation dialog ---- */
 .ga-confirm-overlay {
