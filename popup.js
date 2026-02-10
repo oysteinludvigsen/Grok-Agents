@@ -48,7 +48,7 @@ $("#test-btn").addEventListener("click", async () => {
       showMsg(`Connected \u2014 host v${res.version ?? "?"}, shell: ${res.shell ?? "?"}`, "success");
       setStatus(true);
     } else {
-      showMsg(`Failed: ${res?.error ?? res?.stderr ?? "unknown"}`, "error");
+      showMsg(`Failed: ${res?.stderr || res?.error || "unknown"}`, "error");
       setStatus(false);
     }
   } catch (err) {

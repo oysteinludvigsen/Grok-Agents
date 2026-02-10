@@ -296,8 +296,7 @@
       if (chrome.runtime.lastError || !res?.connected) {
         dot.className      = "status-dot warn";
         title.textContent  = "Not connected";
-        detail.textContent = res?.error || res?.stderr
-          || "Run setup.py first, then reload the extension.";
+        detail.textContent = res?.stderr || "Run setup.py first, then reload the extension.";
       } else {
         dot.className      = "status-dot ok";
         title.textContent  = "Connected";

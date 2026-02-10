@@ -137,7 +137,7 @@
         status.textContent = `Connected (v${res.version ?? "?"})`;
         indicator.className = "ga-indicator ga-connected";
       } else {
-        status.textContent = `Disconnected: ${res?.error ?? "host not found"}`;
+        status.textContent = `Disconnected: ${res?.stderr || "host not found"}`;
         indicator.className = "ga-indicator ga-disconnected";
       }
     } catch {
