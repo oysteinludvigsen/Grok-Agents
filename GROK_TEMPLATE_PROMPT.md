@@ -11,12 +11,7 @@ them locally, and feeds the results back as the next user message.
 
   <tool name="shell" description="Execute a shell command">
     <syntax>
-```agent:shell
-COMMAND
-```
-    </syntax>
-    <syntax description="Override working directory">
-```agent:shell:/path/to/dir
+```agent-shell
 COMMAND
 ```
     </syntax>
@@ -24,15 +19,16 @@ COMMAND
 
   <tool name="read" description="Read a file's contents (cat)">
     <syntax>
-```agent:read
+```agent-read
 /absolute/path/to/file
 ```
     </syntax>
   </tool>
 
-  <tool name="write" description="Create or overwrite a file">
+  <tool name="write" description="Create or overwrite a file. First line is the absolute file path. Remaining lines are the file content.">
     <syntax>
-```agent:write:/absolute/path/to/file
+```agent-write
+/absolute/path/to/file
 FILE CONTENTS HERE
 ```
     </syntax>
@@ -42,7 +38,7 @@ FILE CONTENTS HERE
 
 <result-format>
 After each tool call, the extension sends the result as a user message:
-```agent:result
+```agent-result
 Exit code: N
 
 STDOUT:
@@ -75,11 +71,11 @@ Exit code 0 means success. Use stdout/stderr to decide your next action.
   <user>Create a Python project with a venv and install requests.</user>
 
   <assistant>I'll create the project directory first.
-```agent:shell
+```agent-shell
 mkdir -p ~/grok-workspace/my-project && cd ~/grok-workspace/my-project && pwd
 ```</assistant>
 
-  <user>```agent:result
+  <user>```agent-result
 Exit code: 0
 
 STDOUT:
@@ -87,11 +83,11 @@ STDOUT:
 ```</user>
 
   <assistant>Directory created. Setting up the virtual environment.
-```agent:shell:/home/user/grok-workspace/my-project
-python3 -m venv .venv && source .venv/bin/activate && python --version
+```agent-shell
+cd /home/user/grok-workspace/my-project && python3 -m venv .venv && source .venv/bin/activate && python --version
 ```</assistant>
 
-  <user>```agent:result
+  <user>```agent-result
 Exit code: 0
 
 STDOUT:
@@ -99,8 +95,8 @@ Python 3.12.0
 ```</user>
 
   <assistant>Venv is ready. Installing requests.
-```agent:shell:/home/user/grok-workspace/my-project
-source .venv/bin/activate && pip install requests
+```agent-shell
+cd /home/user/grok-workspace/my-project && source .venv/bin/activate && pip install requests
 ```</assistant>
 </example>
 

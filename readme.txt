@@ -70,7 +70,7 @@ Template Prompt
 
   This prompt teaches Grok the tool-call format:
 
-    ```agent:shell
+    ```agent-shell
     <your command>
     ```
 
@@ -106,13 +106,13 @@ How It Works
 
   1. You paste the template prompt into a Grok conversation.
   2. You give Grok a task (e.g. "set up a Node.js project").
-  3. Grok outputs an  agent:shell  code block with a command.
+  3. Grok outputs an  agent-shell  code block with a command.
   4. The content script detects the block and shows a confirmation
      dialog (unless auto-execute is enabled in settings).
   5. The command is sent to the Python native messaging host, which
      executes it in your configured working directory via zsh, bash,
      or PowerShell.
-  6. stdout, stderr, and the exit code are formatted as an  agent:result
+  6. stdout, stderr, and the exit code are formatted as an  agent-result
      block and injected back into the chat automatically.
   7. Grok reads the result and decides its next step — fully agentic.
 

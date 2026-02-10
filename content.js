@@ -7,15 +7,16 @@
  *
  * Tool-call format (output by Grok):
  *
- *   ```agent:shell
+ *   ```agent-shell
  *   ls -la
  *   ```
  *
- *   ```agent:read
+ *   ```agent-read
  *   /path/to/file
  *   ```
  *
- *   ```agent:write:/path/to/file
+ *   ```agent-write
+ *   /path/to/file
  *   file contents here
  *   ```
  */
@@ -172,94 +173,139 @@
   /* ================================================================ */
 
   /**
+   * Recognised language-tag values.  Maps tag → tool name.
+   * Hyphens used (agent-shell, not agent:shell) to survive code-block
+   * renderers that strip or split on colons.
+   */
+  const TAG_MAP = {
+    "agent-shell": "shell",
+    "agent-read":  "read",
+    "agent-write": "write",
+    // Legacy colon forms (in case renderer keeps them):
+    "agent:shell": "shell",
+    "agent:read":  "read",
+    "agent:write": "write",
+    // Bare "agent" defaults to shell:
+    "agent":       "shell",
+  };
+
+  /** Try to parse a language tag string into { tool }.
+   *  Returns null if the string is not an agent tag. */
+  function parseLang(raw) {
+    if (!raw) return null;
+    const s = raw.trim().toLowerCase();
+    if (TAG_MAP[s] !== undefined) return { tool: TAG_MAP[s] };
+    // Prefix match for tags like "agent-shell" that might have trailing text
+    for (const [tag, tool] of Object.entries(TAG_MAP)) {
+      if (s.startsWith(tag)) return { tool };
+    }
+    return null;
+  }
+
+  /**
    * Scans the page for unprocessed agent code blocks.
    *
-   * grok.com renders ```agent:shell as a code block with language label
-   * "agent" (stripping ":shell").  We therefore match broadly:
-   *   - class="language-agent*"
-   *   - a visible language label containing "agent"
-   *   - text content starting with "agent" on the first line
-   *   - raw text fences in message containers
+   * Uses multiple strategies to handle grok.com's DOM rendering:
+   *   1. CSS class on <code> (language-agent-shell, etc.)
+   *   2. Language label element near a <pre>/<code> block
+   *   3. Any element whose text starts with "agent-shell" etc.
+   *   4. Broad scan of all elements for smallest match
+   *   5. Raw text fences in message containers
    */
   function findAgentBlocks() {
     const blocks = [];
     const seen = new Set();
 
-    function add(element, tool, arg, content) {
+    function add(element, tool, content) {
       if (!content) return;
       const key = `${tool}|${content}`;
       if (seen.has(key)) return;
       if (element.hasAttribute(PROCESSED)) return;
       seen.add(key);
-      blocks.push({ element, tool, arg, content });
+      blocks.push({ element, tool, arg: null, content });
     }
 
-    /** Parse an "agent..." language string into { tool, arg }.
-     *  Accepts: "agent", "agent:shell", "agent:read", "agent:write:/path" */
-    function parseLang(lang) {
-      if (!lang) return null;
-      const s = lang.trim().toLowerCase();
-      if (s === "agent" || s === "agent:shell") return { tool: "shell", arg: null };
-      if (s === "agent:read")                   return { tool: "read",  arg: null };
-      const wm = s.match(/^agent:write(?::(.+))?$/);
-      if (wm) return { tool: "write", arg: wm[1]?.trim() ?? null };
-      if (s.startsWith("agent"))                return { tool: "shell", arg: null };
-      return null;
-    }
-
-    // ── Strategy 1: <code class="language-agent*"> ──────────────────
+    // ── Strategy 1: <code class="language-agent-*"> ─────────────────
     for (const el of document.querySelectorAll('code[class*="language-agent"]')) {
       if (el.hasAttribute(PROCESSED)) continue;
       const cls = [...el.classList].find((c) => c.startsWith("language-agent"));
       const parsed = parseLang(cls?.replace("language-", ""));
       if (!parsed) continue;
-      add(el, parsed.tool, parsed.arg, el.textContent.trim());
+      add(el, parsed.tool, el.textContent.trim());
     }
 
-    // ── Strategy 2: language label in a parent/sibling of <pre> ─────
-    //    grok.com renders: <div>...<span>agent</span>...<pre><code>
+    // ── Strategy 2: language label near <pre> / <code> ──────────────
+    //    grok.com often renders: <div>...<span>agent-shell</span>...<pre><code>
     for (const pre of document.querySelectorAll("pre")) {
       if (pre.hasAttribute(PROCESSED)) continue;
       if (blocks.some((b) => pre.contains(b.element))) continue;
 
-      // Walk the parent container looking for a language label
       const container = pre.parentElement;
       if (!container) continue;
 
       let parsed = null;
-      for (const node of container.querySelectorAll("span, div, [class*='lang'], [class*='code-']")) {
-        if (pre.contains(node)) continue; // skip nodes inside the <pre>
-        const txt = node.textContent.trim();
+      for (const node of container.querySelectorAll("span, div, button, [class*='lang'], [class*='code'], [class*='header']")) {
+        if (pre.contains(node)) continue;
+        const txt = node.textContent.trim().toLowerCase();
         parsed = parseLang(txt);
         if (parsed) break;
       }
       if (!parsed) continue;
 
       const code = pre.querySelector("code") || pre;
-      add(code, parsed.tool, parsed.arg, code.textContent.trim());
+      add(code, parsed.tool, code.textContent.trim());
     }
 
-    // ── Strategy 3: text content starting with "agent" ──────────────
-    for (const el of document.querySelectorAll("pre code, pre")) {
+    // ── Strategy 3: text content of <pre>/<code> starting with agent- tag ──
+    for (const el of document.querySelectorAll("pre code, pre, code")) {
       if (el.hasAttribute(PROCESSED)) continue;
       if (blocks.some((b) => b.element === el || el.contains(b.element))) continue;
       const text = el.textContent;
-      // Match: "agent\ncmd" or "agent:shell\ncmd" etc.
-      const m = text.match(/^agent(?::(shell|read|write)(?::([^\n]*))?)?\n([\s\S]+)$/);
+      const m = text.match(/^(agent[-:](shell|read|write))\s*\n([\s\S]+)$/);
       if (!m) continue;
-      add(el, m[1] || "shell", m[2]?.trim() ?? null, m[3].trim());
+      add(el, m[2], m[3].trim());
     }
 
-    // ── Strategy 4: raw text scan inside message containers ─────────
+    // ── Strategy 4: broad scan — any element whose trimmed text ─────
+    //    starts with an agent tag followed by a newline.
+    //    We pick the SMALLEST (most specific) matching element.
+    const candidates = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, {
+      acceptNode(node) {
+        if (node.hasAttribute(PROCESSED)) return NodeFilter.FILTER_REJECT;
+        if (blocks.some((b) => b.element === node)) return NodeFilter.FILTER_SKIP;
+        const text = node.textContent;
+        if (!text) return NodeFilter.FILTER_SKIP;
+        const trimmed = text.trimStart();
+        if (/^agent[-:](shell|read|write)\s*\n/i.test(trimmed)) return NodeFilter.FILTER_ACCEPT;
+        return NodeFilter.FILTER_SKIP;
+      },
+    });
+    let n;
+    while ((n = walker.nextNode())) candidates.push(n);
+
+    // Keep only leaf-most (smallest) matches — reject any ancestor of another candidate
+    const leafCandidates = candidates.filter(
+      (c) => !candidates.some((other) => other !== c && c.contains(other))
+    );
+    for (const el of leafCandidates) {
+      if (el.hasAttribute(PROCESSED)) continue;
+      if (blocks.some((b) => b.element === el)) continue;
+      const text = el.textContent.trimStart();
+      const m = text.match(/^agent[-:](shell|read|write)\s*\n([\s\S]+)$/i);
+      if (!m) continue;
+      add(el, m[1].toLowerCase(), m[2].trim());
+    }
+
+    // ── Strategy 5: raw text fences in message containers ───────────
     for (const msgEl of document.querySelectorAll(
       '[class*="message"], [class*="Message"], [data-message-author-role="assistant"], [data-testid*="message"]'
     )) {
       const raw = msgEl.textContent;
-      // Match ```agent:shell ... ``` and also ```agent ... ```
-      const re = /```agent(?::(shell|read|write)(?::([^\n]*))?)?\n([\s\S]*?)```/g;
+      const re = /```agent[-:](shell|read|write)\s*\n([\s\S]*?)```/gi;
       let match;
       while ((match = re.exec(raw)) !== null) {
-        add(msgEl, match[1] || "shell", match[2]?.trim() ?? null, match[3].trim());
+        add(msgEl, match[1].toLowerCase(), match[2].trim());
       }
     }
 
@@ -336,15 +382,17 @@
             result = await executeCommand(`cat -- "${block.content}"`, block.arg);
             break;
           case "write": {
-            const fp = block.arg;
+            // First line of content is the file path, rest is file body
+            const nlIdx = block.content.indexOf("\n");
+            const fp = nlIdx > -1 ? block.content.substring(0, nlIdx).trim() : null;
+            const body = nlIdx > -1 ? block.content.substring(nlIdx + 1) : "";
             if (!fp) {
-              result = { exitCode: 1, stdout: "", stderr: "No file path specified for write" };
+              result = { exitCode: 1, stdout: "", stderr: "No file path specified for write (first line must be the path)" };
               break;
             }
-            // Use a heredoc with a unique delimiter to avoid content collisions
             const delim = "GROK_AGENT_EOF_" + Math.random().toString(36).slice(2, 8);
             result = await executeCommand(
-              `cat << '${delim}' > "${fp}"\n${block.content}\n${delim}`,
+              `cat << '${delim}' > "${fp}"\n${body}\n${delim}`,
               null
             );
             break;
@@ -380,7 +428,7 @@
         s = s.substring(0, settings.maxOutputSize) + "\n\u2026 [truncated]";
       parts.push(`STDERR:\n${s}`);
     }
-    return "```agent:result\n" + parts.join("\n\n") + "\n```";
+    return "```agent-result\n" + parts.join("\n\n") + "\n```";
   }
 
   async function injectResult(result) {
