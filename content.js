@@ -41,14 +41,13 @@
     maxOutputSize: 50_000,
   };
 
-  chrome.runtime.sendMessage({ type: "getSettings" }, (res) => {
-    if (res) {
-      Object.assign(settings, res);
-      updatePanelCwd();
-      // Sync the auto-execute checkbox if the panel already exists
-      const cb = document.getElementById("ga-auto-exec");
-      if (cb) cb.checked = settings.autoExecute;
-    }
+  // Load settings directly from storage (no roundtrip through background.js,
+  // which may still be waking up in MV3).
+  chrome.storage.local.get(Object.keys(settings), (stored) => {
+    if (stored) Object.assign(settings, stored);
+    updatePanelCwd();
+    const cb = document.getElementById("ga-auto-exec");
+    if (cb) cb.checked = settings.autoExecute;
   });
 
   chrome.storage.onChanged.addListener((changes) => {
@@ -93,10 +92,7 @@
     autoBox.checked = settings.autoExecute;
     autoBox.addEventListener("change", (e) => {
       settings.autoExecute = e.target.checked;
-      chrome.runtime.sendMessage({
-        type: "saveSettings",
-        payload: { autoExecute: e.target.checked },
-      });
+      chrome.storage.local.set({ autoExecute: e.target.checked });
     });
 
     // Manual scan
@@ -181,13 +177,12 @@
     "agent-shell": "shell",
     "agent-read":  "read",
     "agent-write": "write",
-    // Legacy colon forms (in case renderer keeps them):
     "agent:shell": "shell",
     "agent:read":  "read",
     "agent:write": "write",
-    // Bare "agent" defaults to shell:
     "agent":       "shell",
   };
+  const AGENT_TAG_SET = new Set(Object.keys(TAG_MAP));
 
   /** Try to parse a language tag string into { tool }.
    *  Returns null if the string is not an agent tag. */
@@ -195,7 +190,6 @@
     if (!raw) return null;
     const s = raw.trim().toLowerCase();
     if (TAG_MAP[s] !== undefined) return { tool: TAG_MAP[s] };
-    // Prefix match for tags like "agent-shell" that might have trailing text
     for (const [tag, tool] of Object.entries(TAG_MAP)) {
       if (s.startsWith(tag)) return { tool };
     }
@@ -205,12 +199,16 @@
   /**
    * Scans the page for unprocessed agent code blocks.
    *
-   * Uses multiple strategies to handle grok.com's DOM rendering:
-   *   1. CSS class on <code> (language-agent-shell, etc.)
-   *   2. Language label element near a <pre>/<code> block
-   *   3. Any element whose text starts with "agent-shell" etc.
-   *   4. Broad scan of all elements for smallest match
-   *   5. Raw text fences in message containers
+   * Primary strategy (label-first):
+   *   grok.com renders code blocks with the language label ("agent-shell")
+   *   and the code content ("pwd && ls") in SEPARATE DOM elements.
+   *   We find label elements first, then walk up the DOM to locate the
+   *   associated code content in a sibling branch.
+   *
+   * Fallback strategies for other renderers:
+   *   - CSS class "language-agent-*" on <code>
+   *   - Text starting with "agent-shell\n" in <pre>/<code>
+   *   - Raw ```agent-shell ...``` fences in message containers
    */
   function findAgentBlocks() {
     const blocks = [];
@@ -225,7 +223,79 @@
       blocks.push({ element, tool, arg: null, content });
     }
 
-    // ── Strategy 1: <code class="language-agent-*"> ─────────────────
+    // ── Primary: Label-first detection ──────────────────────────────
+    //
+    // grok.com typically renders a code block as:
+    //   <container>
+    //     <header> <span>agent-shell</span> <button>Copy</button> </header>
+    //     <code-area> command text </code-area>
+    //   </container>
+    //
+    // 1. Find small elements whose text matches an agent tag exactly.
+    // 2. Walk up the DOM level by level.
+    // 3. At each level, search sibling branches for code content.
+
+    for (const labelEl of document.querySelectorAll("span, div, p, small, em, strong, td, label")) {
+      const rawText = labelEl.textContent.trim();
+      if (rawText.length > 25) continue;                       // labels are short
+      const lowerText = rawText.toLowerCase();
+      if (!AGENT_TAG_SET.has(lowerText)) continue;
+      if (labelEl.querySelector("pre, code, textarea")) continue; // too big
+      if (labelEl.hasAttribute(PROCESSED)) continue;
+
+      const parsed = parseLang(lowerText);
+      if (!parsed) continue;
+
+      // Walk up level by level looking for code content
+      let codeText = null;
+      let codeEl = null;
+      let searchRoot = labelEl.parentElement;
+
+      for (let depth = 0; depth < 6 && searchRoot && !codeEl; depth++) {
+        // Scan children of searchRoot for the code content.
+        // Only look at sibling branches (skip the branch containing the label).
+        for (const child of searchRoot.children) {
+          if (child === labelEl || child.contains(labelEl)) continue;
+          if (child.hasAttribute(PROCESSED)) continue;
+
+          // Try standard code elements inside this child first
+          const innerCode =
+            child.querySelector("pre code") ||
+            child.querySelector("pre") ||
+            child.querySelector("code") ||
+            child.querySelector('[class*="code"]');
+          if (innerCode) {
+            const t = innerCode.textContent.trim();
+            if (t && !AGENT_TAG_SET.has(t.toLowerCase())) {
+              codeText = t;
+              codeEl = innerCode;
+              break;
+            }
+          }
+
+          // Fallback: the child itself holds the code as plain text
+          const ct = child.textContent.trim();
+          if (!ct || ct.length < 1) continue;
+          if (ct.toLowerCase() === "copy") continue;
+          if (AGENT_TAG_SET.has(ct.toLowerCase())) continue;
+          // Skip button-only branches
+          if (child.tagName === "BUTTON") continue;
+          if (child.children.length === 1 && child.children[0].tagName === "BUTTON") continue;
+
+          codeText = ct;
+          codeEl = child;
+          break;
+        }
+
+        searchRoot = searchRoot.parentElement;
+      }
+
+      if (codeText && codeEl) {
+        add(codeEl, parsed.tool, codeText);
+      }
+    }
+
+    // ── Fallback 1: <code class="language-agent-*"> ─────────────────
     for (const el of document.querySelectorAll('code[class*="language-agent"]')) {
       if (el.hasAttribute(PROCESSED)) continue;
       const cls = [...el.classList].find((c) => c.startsWith("language-agent"));
@@ -234,29 +304,7 @@
       add(el, parsed.tool, el.textContent.trim());
     }
 
-    // ── Strategy 2: language label near <pre> / <code> ──────────────
-    //    grok.com often renders: <div>...<span>agent-shell</span>...<pre><code>
-    for (const pre of document.querySelectorAll("pre")) {
-      if (pre.hasAttribute(PROCESSED)) continue;
-      if (blocks.some((b) => pre.contains(b.element))) continue;
-
-      const container = pre.parentElement;
-      if (!container) continue;
-
-      let parsed = null;
-      for (const node of container.querySelectorAll("span, div, button, [class*='lang'], [class*='code'], [class*='header']")) {
-        if (pre.contains(node)) continue;
-        const txt = node.textContent.trim().toLowerCase();
-        parsed = parseLang(txt);
-        if (parsed) break;
-      }
-      if (!parsed) continue;
-
-      const code = pre.querySelector("code") || pre;
-      add(code, parsed.tool, code.textContent.trim());
-    }
-
-    // ── Strategy 3: text content of <pre>/<code> starting with agent- tag ──
+    // ── Fallback 2: text in <pre>/<code> starting with agent tag ────
     for (const el of document.querySelectorAll("pre code, pre, code")) {
       if (el.hasAttribute(PROCESSED)) continue;
       if (blocks.some((b) => b.element === el || el.contains(b.element))) continue;
@@ -266,38 +314,7 @@
       add(el, m[2], m[3].trim());
     }
 
-    // ── Strategy 4: broad scan — any element whose trimmed text ─────
-    //    starts with an agent tag followed by a newline.
-    //    We pick the SMALLEST (most specific) matching element.
-    const candidates = [];
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, {
-      acceptNode(node) {
-        if (node.hasAttribute(PROCESSED)) return NodeFilter.FILTER_REJECT;
-        if (blocks.some((b) => b.element === node)) return NodeFilter.FILTER_SKIP;
-        const text = node.textContent;
-        if (!text) return NodeFilter.FILTER_SKIP;
-        const trimmed = text.trimStart();
-        if (/^agent[-:](shell|read|write)\s*\n/i.test(trimmed)) return NodeFilter.FILTER_ACCEPT;
-        return NodeFilter.FILTER_SKIP;
-      },
-    });
-    let n;
-    while ((n = walker.nextNode())) candidates.push(n);
-
-    // Keep only leaf-most (smallest) matches — reject any ancestor of another candidate
-    const leafCandidates = candidates.filter(
-      (c) => !candidates.some((other) => other !== c && c.contains(other))
-    );
-    for (const el of leafCandidates) {
-      if (el.hasAttribute(PROCESSED)) continue;
-      if (blocks.some((b) => b.element === el)) continue;
-      const text = el.textContent.trimStart();
-      const m = text.match(/^agent[-:](shell|read|write)\s*\n([\s\S]+)$/i);
-      if (!m) continue;
-      add(el, m[1].toLowerCase(), m[2].trim());
-    }
-
-    // ── Strategy 5: raw text fences in message containers ───────────
+    // ── Fallback 3: raw text fences in message containers ───────────
     for (const msgEl of document.querySelectorAll(
       '[class*="message"], [class*="Message"], [data-message-author-role="assistant"], [data-testid*="message"]'
     )) {
