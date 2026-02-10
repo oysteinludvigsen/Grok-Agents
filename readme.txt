@@ -19,9 +19,9 @@ Prerequisites
 Quick Start (one command)
 -------------------------
 
-  1. Download or extract  grok-agent-extension.zip.
+  1. Clone or download the repo from GitHub (Code -> Download ZIP).
 
-  2. Open a terminal inside the extracted folder and run:
+  2. Open a terminal inside the repo folder and run:
 
        python3 setup.py          # macOS / Linux
        python  setup.py          # Windows (PowerShell)
@@ -100,10 +100,6 @@ File Overview
       grok_agent_host.py       Python host that executes commands
       install.sh               Standalone macOS/Linux installer (fallback)
       install.ps1              Standalone Windows installer (fallback)
-
-  Distribution:
-    grok-agent-extension.zip   Complete package (at the repo root)
-
 
 How It Works
 ------------
