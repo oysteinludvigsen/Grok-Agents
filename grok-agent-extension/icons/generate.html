@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Grok Agent — Generate Icons</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 40px; }
+    h1 { margin-bottom: 20px; }
+    .icons { display: flex; gap: 24px; align-items: flex-end; margin-bottom: 24px; }
+    .icon-box { text-align: center; }
+    .icon-box canvas { border: 1px solid #333; border-radius: 4px; }
+    .icon-box p { font-size: 12px; margin-top: 6px; color: #888; }
+    button { padding: 10px 20px; background: #6366f1; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+    button:hover { background: #4f46e5; }
+    .info { margin-top: 16px; font-size: 13px; color: #888; }
+  </style>
+</head>
+<body>
+  <h1>Grok Agent Icon Generator</h1>
+  <p>Click the button to download all three icon sizes.</p>
+
+  <div class="icons">
+    <div class="icon-box"><canvas id="c16"  width="16"  height="16"></canvas><p>16 &times; 16</p></div>
+    <div class="icon-box"><canvas id="c48"  width="48"  height="48"></canvas><p>48 &times; 48</p></div>
+    <div class="icon-box"><canvas id="c128" width="128" height="128"></canvas><p>128 &times; 128</p></div>
+  </div>
+
+  <button id="dl">Download All Icons</button>
+
+  <p class="info">
+    Place the downloaded files in the <code>icons/</code> folder as
+    <code>icon16.png</code>, <code>icon48.png</code>, <code>icon128.png</code>.
+  </p>
+
+  <script>
+    function drawIcon(canvas) {
+      const s = canvas.width;
+      const ctx = canvas.getContext("2d");
+
+      // Background
+      const grad = ctx.createLinearGradient(0, 0, s, s);
+      grad.addColorStop(0, "#6366f1");
+      grad.addColorStop(1, "#4f46e5");
+      ctx.fillStyle = grad;
+      const r = s * 0.18;
+      ctx.beginPath();
+      ctx.moveTo(r, 0);
+      ctx.lineTo(s - r, 0);
+      ctx.quadraticCurveTo(s, 0, s, r);
+      ctx.lineTo(s, s - r);
+      ctx.quadraticCurveTo(s, s, s - r, s);
+      ctx.lineTo(r, s);
+      ctx.quadraticCurveTo(0, s, 0, s - r);
+      ctx.lineTo(0, r);
+      ctx.quadraticCurveTo(0, 0, r, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // "GA" text
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = `bold ${s * 0.44}px -apple-system, "Segoe UI", sans-serif`;
+      ctx.fillText("GA", s / 2, s / 2 + s * 0.02);
+
+      // Small terminal cursor line
+      const lw = s * 0.03;
+      ctx.strokeStyle = "rgba(255,255,255,0.5)";
+      ctx.lineWidth = lw < 1 ? 1 : lw;
+      ctx.beginPath();
+      ctx.moveTo(s * 0.25, s * 0.78);
+      ctx.lineTo(s * 0.75, s * 0.78);
+      ctx.stroke();
+    }
+
+    const sizes = [16, 48, 128];
+    const canvases = sizes.map((s) => {
+      const c = document.getElementById(`c${s}`);
+      drawIcon(c);
+      return c;
+    });
+
+    document.getElementById("dl").addEventListener("click", () => {
+      canvases.forEach((c, i) => {
+        const a = document.createElement("a");
+        a.download = `icon${sizes[i]}.png`;
+        a.href = c.toDataURL("image/png");
+        a.click();
+      });
+    });
+  </script>
+</body>
+</html>

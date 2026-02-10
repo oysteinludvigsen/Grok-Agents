@@ -1,0 +1,211 @@
+/* =================================================================
+   Grok Agent — Content Script Styles
+   ================================================================= */
+
+/* ---- Floating panel ---- */
+#grok-agent-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 300px;
+  background: #1a1a2e;
+  border: 1px solid #30304a;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  color: #e0e0e0;
+  overflow: hidden;
+  transition: height 0.25s ease;
+}
+
+#grok-agent-panel.ga-minimized .ga-body {
+  display: none;
+}
+
+/* Header */
+.ga-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #16213e;
+  cursor: grab;
+  user-select: none;
+}
+.ga-header:active {
+  cursor: grabbing;
+}
+
+.ga-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #555;
+  flex-shrink: 0;
+}
+.ga-indicator.ga-connected  { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+.ga-indicator.ga-disconnected { background: #f87171; box-shadow: 0 0 6px #f87171; }
+
+.ga-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+
+.ga-minimize {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.ga-minimize:hover { color: #fff; }
+
+/* Body */
+.ga-body {
+  padding: 12px 14px;
+}
+
+.ga-status {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.ga-cwd {
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: #6b7280;
+  word-break: break-all;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+.ga-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.ga-toggle input { accent-color: #6366f1; }
+
+.ga-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+.ga-btn:hover  { background: #4f46e5; }
+.ga-btn:active { background: #4338ca; }
+
+/* Log */
+.ga-log {
+  margin-top: 10px;
+  max-height: 160px;
+  overflow-y: auto;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 11px;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+.ga-log-entry {
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  word-break: break-all;
+}
+.ga-log-entry.cmd     { color: #60a5fa; }
+.ga-log-entry.success { color: #4ade80; }
+.ga-log-entry.error   { color: #f87171; }
+.ga-log-entry.info    { color: #9ca3af; }
+
+/* ---- Confirmation dialog ---- */
+.ga-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647;
+}
+
+.ga-confirm-dialog {
+  background: #1e1e2e;
+  border: 1px solid #444;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 520px;
+  width: 90vw;
+  color: #e0e0e0;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+.ga-confirm-dialog h3 {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.ga-confirm-tool {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+.ga-confirm-arg {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+.ga-confirm-cmd {
+  background: #111;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 8px 0 0;
+}
+.ga-confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+  justify-content: flex-end;
+}
+.ga-btn-danger {
+  background: #dc2626 !important;
+  width: auto !important;
+}
+.ga-btn-danger:hover { background: #b91c1c !important; }
+.ga-btn-ok {
+  background: #16a34a !important;
+  width: auto !important;
+}
+.ga-btn-ok:hover { background: #15803d !important; }
+
+/* ---- Agent block state indicators ---- */
+.ga-block-pending    { border-left: 3px solid #fbbf24 !important; }
+.ga-block-processing { border-left: 3px solid #60a5fa !important; animation: ga-pulse 1s ease-in-out infinite; }
+.ga-block-success    { border-left: 3px solid #4ade80 !important; }
+.ga-block-error      { border-left: 3px solid #f87171 !important; }
+.ga-block-skipped    { border-left: 3px solid #6b7280 !important; opacity: 0.6; }
+
+@keyframes ga-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}

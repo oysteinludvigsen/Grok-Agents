@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Grok Agent</h1>
+
+    <div id="status-bar" class="status-bar">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">Checking&hellip;</span>
+    </div>
+
+    <section class="section">
+      <label for="working-dir">Working Directory</label>
+      <input type="text" id="working-dir" placeholder="~/grok-workspace" />
+    </section>
+
+    <section class="section">
+      <label for="shell-select">Shell</label>
+      <select id="shell-select">
+        <option value="auto">Auto-detect</option>
+        <option value="zsh">zsh</option>
+        <option value="bash">bash</option>
+        <option value="powershell">PowerShell</option>
+        <option value="pwsh">PowerShell Core (pwsh)</option>
+      </select>
+    </section>
+
+    <section class="section">
+      <label for="timeout">Command Timeout (seconds)</label>
+      <input type="number" id="timeout" min="5" max="600" value="30" />
+    </section>
+
+    <section class="section">
+      <label for="max-output">Max Output Size (characters)</label>
+      <input type="number" id="max-output" min="1000" max="500000" value="50000" step="1000" />
+    </section>
+
+    <section class="section">
+      <label class="checkbox-label">
+        <input type="checkbox" id="auto-execute" />
+        <span>Auto-execute commands</span>
+      </label>
+      <p class="warning">When enabled, commands from Grok execute without confirmation.</p>
+    </section>
+
+    <button id="save-btn" class="btn-primary">Save Settings</button>
+    <button id="test-btn" class="btn-secondary">Test Connection</button>
+
+    <div id="message" class="message hidden"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
