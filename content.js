@@ -210,9 +210,21 @@
    *   - Text starting with "agent-shell\n" in <pre>/<code>
    *   - Raw ```agent-shell ...``` fences in message containers
    */
-  function findAgentBlocks() {
+  /**
+   * Describe an element briefly for debug logging.
+   */
+  function describeEl(el) {
+    if (!el) return "(null)";
+    const tag = el.tagName?.toLowerCase() ?? "?";
+    const cls = el.className ? `.${[...el.classList].join(".")}` : "";
+    const id = el.id ? `#${el.id}` : "";
+    return `<${tag}${id}${cls}>`;
+  }
+
+  function findAgentBlocks(debug = false) {
     const blocks = [];
     const seen = new Set();
+    const log = debug ? (...a) => appendLog(a.join(" "), "info") : () => {};
 
     function add(element, tool, content) {
       if (!content) return;
@@ -225,25 +237,57 @@
 
     // ── Primary: Label-first detection ──────────────────────────────
     //
-    // grok.com typically renders a code block as:
-    //   <container>
-    //     <header> <span>agent-shell</span> <button>Copy</button> </header>
-    //     <code-area> command text </code-area>
-    //   </container>
-    //
-    // 1. Find small elements whose text matches an agent tag exactly.
-    // 2. Walk up the DOM level by level.
-    // 3. At each level, search sibling branches for code content.
+    // grok.com renders code blocks with the language label ("agent-shell")
+    // and code content in SEPARATE DOM elements.  We find the label first,
+    // then walk up the DOM to locate the code content in a sibling branch.
 
-    for (const labelEl of document.querySelectorAll("span, div, p, small, em, strong, td, label")) {
-      const rawText = labelEl.textContent.trim();
-      if (rawText.length > 25) continue;                       // labels are short
-      const lowerText = rawText.toLowerCase();
-      if (!AGENT_TAG_SET.has(lowerText)) continue;
-      if (labelEl.querySelector("pre, code, textarea")) continue; // too big
+    // Step 1: find ALL elements on the page that contain the text "agent-"
+    //         and are small enough to be a label (not a huge container).
+    const labelEls = [];
+    const allEls = document.querySelectorAll("*");
+    for (const el of allEls) {
+      // Skip our own panel
+      if (el.closest("#grok-agent-panel")) continue;
+      const t = el.textContent;
+      if (!t) continue;
+      const trimmed = t.trim().toLowerCase();
+      // Match exact agent tags
+      if (AGENT_TAG_SET.has(trimmed) && trimmed.length < 30) {
+        // Ensure it's a leaf-ish label: no large sub-trees
+        if (!el.querySelector("pre, code, textarea, table")) {
+          labelEls.push(el);
+        }
+      }
+    }
+
+    // Deduplicate: keep only the innermost (smallest) elements
+    const leafLabels = labelEls.filter(
+      (el) => !labelEls.some((other) => other !== el && el.contains(other))
+    );
+
+    if (debug) {
+      log(`[diag] Found ${leafLabels.length} label element(s) matching agent tags`);
+      for (const el of leafLabels) {
+        const chain = [];
+        let p = el;
+        for (let i = 0; i < 6 && p; i++) { chain.push(describeEl(p)); p = p.parentElement; }
+        log(`[diag] label: ${describeEl(el)} text="${el.textContent.trim()}" chain=${chain.join(" > ")}`);
+        // Show siblings
+        const parent = el.parentElement;
+        if (parent) {
+          log(`[diag]   parent ${describeEl(parent)} has ${parent.children.length} children:`);
+          for (let i = 0; i < Math.min(parent.children.length, 8); i++) {
+            const c = parent.children[i];
+            const txt = c.textContent.trim().substring(0, 80);
+            log(`[diag]   [${i}] ${describeEl(c)} text="${txt}"`);
+          }
+        }
+      }
+    }
+
+    for (const labelEl of leafLabels) {
       if (labelEl.hasAttribute(PROCESSED)) continue;
-
-      const parsed = parseLang(lowerText);
+      const parsed = parseLang(labelEl.textContent.trim());
       if (!parsed) continue;
 
       // Walk up level by level looking for code content
@@ -252,8 +296,8 @@
       let searchRoot = labelEl.parentElement;
 
       for (let depth = 0; depth < 6 && searchRoot && !codeEl; depth++) {
-        // Scan children of searchRoot for the code content.
-        // Only look at sibling branches (skip the branch containing the label).
+        if (debug) log(`[diag] depth=${depth} searchRoot=${describeEl(searchRoot)} children=${searchRoot.children.length}`);
+
         for (const child of searchRoot.children) {
           if (child === labelEl || child.contains(labelEl)) continue;
           if (child.hasAttribute(PROCESSED)) continue;
@@ -266,6 +310,7 @@
             child.querySelector('[class*="code"]');
           if (innerCode) {
             const t = innerCode.textContent.trim();
+            if (debug) log(`[diag]   innerCode ${describeEl(innerCode)} text="${t.substring(0, 60)}"`);
             if (t && !AGENT_TAG_SET.has(t.toLowerCase())) {
               codeText = t;
               codeEl = innerCode;
@@ -278,9 +323,10 @@
           if (!ct || ct.length < 1) continue;
           if (ct.toLowerCase() === "copy") continue;
           if (AGENT_TAG_SET.has(ct.toLowerCase())) continue;
-          // Skip button-only branches
           if (child.tagName === "BUTTON") continue;
           if (child.children.length === 1 && child.children[0].tagName === "BUTTON") continue;
+
+          if (debug) log(`[diag]   plain-text candidate ${describeEl(child)} text="${ct.substring(0, 60)}"`);
 
           codeText = ct;
           codeEl = child;
@@ -291,7 +337,10 @@
       }
 
       if (codeText && codeEl) {
+        if (debug) log(`[diag] MATCHED: tool=${parsed.tool} code="${codeText.substring(0, 60)}"`);
         add(codeEl, parsed.tool, codeText);
+      } else if (debug) {
+        log(`[diag] NO CODE FOUND for label "${labelEl.textContent.trim()}"`);
       }
     }
 
@@ -370,10 +419,14 @@
     }
     executing = true;
     try {
-      const blocks = findAgentBlocks();
+      let blocks = findAgentBlocks();
       if (blocks.length === 0) {
-        appendLog("No new agent blocks found", "info");
-        return;
+        appendLog("No blocks found — running diagnostics…", "info");
+        blocks = findAgentBlocks(true);   // re-run with debug logging
+        if (blocks.length === 0) {
+          appendLog("No new agent blocks found", "info");
+          return;
+        }
       }
       appendLog(`Found ${blocks.length} agent block(s)`, "info");
 
