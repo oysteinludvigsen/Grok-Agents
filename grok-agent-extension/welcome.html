@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Grok Agent — Welcome</title>
+  <style>
+    :root {
+      --bg:       #0f0f1a;
+      --surface:  #1a1a2e;
+      --border:   #2a2a44;
+      --text:     #e0e0e0;
+      --muted:    #9ca3af;
+      --accent:   #6366f1;
+      --green:    #4ade80;
+      --yellow:   #fbbf24;
+      --mono:     "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono", monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+      padding: 0 20px 60px;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+
+    header {
+      text-align: center;
+      padding: 48px 0 32px;
+    }
+    header h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+    header p  { color: var(--muted); font-size: 16px; }
+
+    .status-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .status-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.ok   { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .status-dot.warn { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+    .status-msg { flex: 1; }
+    .status-msg strong { display: block; font-size: 15px; }
+    .status-msg span   { font-size: 13px; color: var(--muted); }
+
+    #conn-btn {
+      padding: 8px 18px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    #conn-btn:hover { filter: brightness(1.15); }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 32px 0 14px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .steps { counter-reset: steps; list-style: none; }
+    .steps li {
+      counter-increment: steps;
+      position: relative;
+      padding: 14px 0 14px 52px;
+    }
+    .steps li::before {
+      content: counter(steps);
+      position: absolute;
+      left: 0;
+      top: 14px;
+      width: 32px;
+      height: 32px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--accent);
+    }
+    .steps li strong { display: block; margin-bottom: 2px; }
+    .steps li span   { color: var(--muted); font-size: 14px; }
+
+    code, .code-block {
+      font-family: var(--mono);
+      font-size: 13px;
+      background: #111;
+      border-radius: 6px;
+    }
+    code { padding: 2px 6px; }
+    .code-block {
+      display: block;
+      padding: 16px;
+      margin: 10px 0;
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.5;
+      border: 1px solid var(--border);
+    }
+    .code-block .comment { color: #6b7280; }
+    .code-block .tag     { color: #818cf8; }
+    .code-block .cmd     { color: var(--green); }
+
+    .copy-wrap { position: relative; }
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 4px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .copy-btn:hover { color: #fff; border-color: var(--accent); }
+
+    .prompt-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 12px 0;
+      max-height: 320px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      font-family: var(--mono);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .btn-row a, .btn-row button {
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: filter 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { filter: brightness(1.15); }
+    .btn-secondary { background: #333; color: var(--text); }
+    .btn-secondary:hover { background: #444; }
+
+    footer {
+      margin-top: 48px;
+      text-align: center;
+      font-size: 12px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Grok Agent</h1>
+    <p>Agentic shell execution for Grok via your Supergrok subscription</p>
+  </header>
+
+  <!-- ─── Connection status ─── -->
+  <div class="status-card" id="status-card">
+    <div class="status-dot" id="status-dot"></div>
+    <div class="status-msg">
+      <strong id="status-title">Checking connection&hellip;</strong>
+      <span id="status-detail">Testing native messaging host</span>
+    </div>
+    <button id="conn-btn">Re-check</button>
+  </div>
+
+  <!-- ─── Quick start ─── -->
+  <h2>Quick Start</h2>
+  <ol class="steps">
+    <li>
+      <strong>Run the setup script</strong>
+      <span>This generates icons &amp; installs the native messaging host.</span>
+      <div class="copy-wrap">
+        <div class="code-block"><span class="comment"># macOS / Linux</span>
+<span class="cmd">python3 setup.py</span>
+
+<span class="comment"># Windows (PowerShell)</span>
+<span class="cmd">python setup.py</span></div>
+        <button class="copy-btn" data-copy="python3 setup.py">Copy</button>
+      </div>
+    </li>
+    <li>
+      <strong>Verify the connection</strong>
+      <span>Click <em>Re-check</em> above — you should see a green dot.</span>
+    </li>
+    <li>
+      <strong>Configure your settings</strong>
+      <span>Click the Grok Agent icon in the toolbar to set your working
+            directory, preferred shell, and timeout.</span>
+    </li>
+    <li>
+      <strong>Paste the template prompt into Grok</strong>
+      <span>Copy the prompt below and paste it at the start of a new Grok
+            conversation (or save it as a Grok template).</span>
+    </li>
+    <li>
+      <strong>Give Grok a task!</strong>
+      <span>Grok will output <code>agent:shell</code> blocks. The extension
+            detects them, runs the command locally, and feeds the result back.</span>
+    </li>
+  </ol>
+
+  <!-- ─── Template prompt ─── -->
+  <h2>Grok Template Prompt</h2>
+  <p style="color:var(--muted);font-size:14px;margin-bottom:8px;">
+    Copy this entire block and paste it as the first message in a Grok chat:
+  </p>
+  <div class="copy-wrap">
+    <div class="prompt-box" id="prompt-box">Loading prompt&hellip;</div>
+    <button class="copy-btn" id="copy-prompt">Copy prompt</button>
+  </div>
+
+  <div class="btn-row" style="margin-top:18px;">
+    <a class="btn-primary" href="https://grok.com" target="_blank">Open Grok</a>
+    <button class="btn-secondary" id="open-popup">Open Settings</button>
+  </div>
+
+  <!-- ─── How it works ─── -->
+  <h2>How It Works</h2>
+  <ol class="steps">
+    <li>
+      <strong>Grok outputs a tool block</strong>
+      <span>e.g. <code>```agent:shell</code> followed by a command</span>
+    </li>
+    <li>
+      <strong>The content script detects it</strong>
+      <span>A MutationObserver watches the page for new code blocks</span>
+    </li>
+    <li>
+      <strong>You confirm (or auto-execute runs it)</strong>
+      <span>A dialog shows the command; you approve or deny</span>
+    </li>
+    <li>
+      <strong>The native host executes it</strong>
+      <span>Via zsh, bash, or PowerShell in your configured working directory</span>
+    </li>
+    <li>
+      <strong>The result is fed back</strong>
+      <span>stdout/stderr are typed into the chat as an <code>agent:result</code> block</span>
+    </li>
+    <li>
+      <strong>Grok continues</strong>
+      <span>It reads the result and decides the next step — fully agentic loop</span>
+    </li>
+  </ol>
+
+  <footer>
+    Grok Agent &mdash; browser extension for agentic Grok usage via Supergrok
+  </footer>
+
+</div>
+
+<script>
+  // ── Connection check ─────────────────────────────────────────────
+  function checkConnection() {
+    const dot    = document.getElementById("status-dot");
+    const title  = document.getElementById("status-title");
+    const detail = document.getElementById("status-detail");
+
+    title.textContent  = "Checking\u2026";
+    detail.textContent = "Testing native messaging host";
+    dot.className      = "status-dot";
+
+    chrome.runtime.sendMessage({ type: "ping" }, (res) => {
+      if (chrome.runtime.lastError || !res?.connected) {
+        dot.className      = "status-dot warn";
+        title.textContent  = "Not connected";
+        detail.textContent = res?.error || res?.stderr
+          || "Run setup.py first, then reload the extension.";
+      } else {
+        dot.className      = "status-dot ok";
+        title.textContent  = "Connected";
+        detail.textContent = `Host v${res.version || "?"} \u2014 ${res.platform}, ${res.shell}`;
+      }
+    });
+  }
+
+  document.getElementById("conn-btn").addEventListener("click", checkConnection);
+  checkConnection();
+
+  // ── Load prompt from bundled file ────────────────────────────────
+  fetch(chrome.runtime.getURL("GROK_TEMPLATE_PROMPT.md"))
+    .then((r) => r.text())
+    .then((text) => {
+      document.getElementById("prompt-box").textContent = text;
+    })
+    .catch(() => {
+      document.getElementById("prompt-box").textContent =
+        "Could not load prompt file. Open GROK_TEMPLATE_PROMPT.md manually.";
+    });
+
+  // ── Copy buttons ─────────────────────────────────────────────────
+  document.querySelectorAll(".copy-btn[data-copy]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(btn.dataset.copy);
+      btn.textContent = "Copied!";
+      setTimeout(() => (btn.textContent = "Copy"), 1500);
+    });
+  });
+
+  document.getElementById("copy-prompt").addEventListener("click", () => {
+    const text = document.getElementById("prompt-box").textContent;
+    navigator.clipboard.writeText(text);
+    const btn = document.getElementById("copy-prompt");
+    btn.textContent = "Copied!";
+    setTimeout(() => (btn.textContent = "Copy prompt"), 1500);
+  });
+
+  // ── Open popup ───────────────────────────────────────────────────
+  document.getElementById("open-popup").addEventListener("click", () => {
+    // Can't programmatically open the popup, but we can open the options
+    // Fallback: just tell the user
+    alert("Click the Grok Agent icon in your browser toolbar to open settings.");
+  });
+</script>
+</body>
+</html>

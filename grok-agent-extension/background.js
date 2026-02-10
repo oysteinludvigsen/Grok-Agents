@@ -79,7 +79,8 @@ function nativeSend(payload) {
 /*  Ensure default settings exist on install                           */
 /* ------------------------------------------------------------------ */
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
+  // Seed default settings
   chrome.storage.local.get(Object.keys(DEFAULT_SETTINGS), (stored) => {
     const toWrite = {};
     for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
@@ -87,4 +88,9 @@ chrome.runtime.onInstalled.addListener(() => {
     }
     if (Object.keys(toWrite).length) chrome.storage.local.set(toWrite);
   });
+
+  // Open the welcome / onboarding page on first install
+  if (details.reason === "install") {
+    chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+  }
 });
